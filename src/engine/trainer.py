@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Optional
 
@@ -7,7 +9,7 @@ import torch.nn as nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from evaluator import evaluate_model
+from src.engine.evaluator import evaluate_model
 
 
 def _train_one_epoch(
@@ -116,7 +118,7 @@ def train_model(
         # Checkpoint model every 10 epochs
         if (epoch % 10 == 9):
             model_path = Path(checkpoint_dir)/f"checkpoint_epoch_{epoch}.pt"
-            torch.save(model.state_dict(), model_path)
+            torch.save({"model_state_dict": model.state_dict(), "epoch": epoch}, model_path)
 
     return pd.DataFrame(results)
     

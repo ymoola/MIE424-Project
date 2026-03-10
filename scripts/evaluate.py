@@ -58,7 +58,7 @@ def main() -> None:
     loader = val_loader if args.split == "val" else test_loader
 
     model = build_model(model_name=args.model, num_classes=len(class_names)).to(device)
-    checkpoint = torch.load(args.checkpoint, map_location=device)
+    checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=True)
     model.load_state_dict(checkpoint["model_state_dict"])
 
     criterion = nn.CrossEntropyLoss()
