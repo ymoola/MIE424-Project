@@ -15,7 +15,7 @@ from src.data.dataloaders import (
     get_mnist_loaders,
 )
 
-DATASET_LOADERS = {
+data_loaders = {
     "cifar10": get_cifar10_loaders,
     "mnist": get_mnist_loaders,
     "fashion_mnist": get_fashion_mnist_loaders,
@@ -36,17 +36,9 @@ def _resolve_device(device_arg: str) -> torch.device:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Evaluate checkpoint on CIFAR-10, MNIST, or Fashion-MNIST."
-    )
+    parser = argparse.ArgumentParser(description="Evaluate checkpoint on CIFAR-10, MNIST, or Fashion-MNIST.")
     parser.add_argument("--checkpoint", type=str, required=True)
-    parser.add_argument(
-        "--dataset",
-        type=str,
-        default="cifar10",
-        choices=list(DATASET_LOADERS),
-        help="Dataset used when training the checkpoint.",
-    )
+    parser.add_argument("--dataset", type=str, default="cifar10", choices=list(data_loaders), help="Dataset used when training the checkpoint.")
     parser.add_argument("--data-root", type=str, default="data")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--num-workers", type=int, default=2)
@@ -66,7 +58,7 @@ def main() -> None:
     device = _resolve_device(args.device)
     print(f"Using device: {device}")
 
-    get_loaders = DATASET_LOADERS[args.dataset]
+    get_loaders = data_loaders[args.dataset]
     _, val_loader, test_loader, class_names = get_loaders(
         data_root=args.data_root,
         batch_size=args.batch_size,

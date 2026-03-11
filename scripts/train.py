@@ -12,13 +12,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.dataloaders import (
-    get_cifar10_loaders,
-    get_fashion_mnist_loaders,
-    get_mnist_loaders,
-)
+from src.data.dataloaders import get_cifar10_loaders, get_fashion_mnist_loaders, get_mnist_loaders
 
-DATASET_LOADERS = {
+data_loaders = {
     "cifar10": get_cifar10_loaders,
     "mnist": get_mnist_loaders,
     "fashion_mnist": get_fashion_mnist_loaders,
