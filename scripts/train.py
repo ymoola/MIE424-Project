@@ -21,6 +21,7 @@ data_loaders = {
 }
 from src.engine.trainer import train_model
 from src.models import build_model
+from src.optim import Lookahead
 from src.utils.seed import set_global_seed
 
 
@@ -35,7 +36,15 @@ def _resolve_device(device_arg: str) -> torch.device:
     return torch.device("cpu")
 
 
-def _build_optimizer(name: str, model: nn.Module, lr: float, weight_decay: float, momentum: float):
+def _build_optimizer(
+    name: str,
+    model: nn.Module,
+    lr: float,
+    weight_decay: float,
+    momentum: float,
+    lookahead_k: int,
+    lookahead_alpha: float,
+):
     name = name.lower()
     if name == "sgd":
         return SGD(model.parameters(), lr=lr, momentum=0.0, weight_decay=weight_decay)
@@ -43,7 +52,19 @@ def _build_optimizer(name: str, model: nn.Module, lr: float, weight_decay: float
         return SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
     if name == "adam":
         return Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    raise ValueError("Unsupported optimizer. Expected one of: sgd, sgd_momentum, adam.")
+    if name == "lookahead_sgd":
+        base = SGD(model.parameters(), lr=lr, momentum=0.0, weight_decay=weight_decay)
+        return Lookahead(base_optimizer=base, k=lookahead_k, alpha=lookahead_alpha)
+    if name == "lookahead_sgd_momentum":
+        base = SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+        return Lookahead(base_optimizer=base, k=lookahead_k, alpha=lookahead_alpha)
+    if name == "lookahead_adam":
+        base = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+        return Lookahead(base_optimizer=base, k=lookahead_k, alpha=lookahead_alpha)
+    raise ValueError(
+        "Unsupported optimizer. Expected one of: "
+        "sgd, sgd_momentum, adam, lookahead_sgd, lookahead_sgd_momentum, lookahead_adam."
+    )
 
 
 def main() -> None:
@@ -68,6 +89,8 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=0.1)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
+    parser.add_argument("--lookahead-k", type=int, default=5)
+    parser.add_argument("--lookahead-alpha", type=float, default=0.5)
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--log-dir", type=str, default="results/tensorboard")
@@ -104,6 +127,8 @@ def main() -> None:
         lr=args.lr,
         weight_decay=args.weight_decay,
         momentum=args.momentum,
+        lookahead_k=args.lookahead_k,
+        lookahead_alpha=args.lookahead_alpha,
     )
 
     run_name = args.run_name or f"{args.dataset}_{args.model}_{args.optimizer}_s{args.seed}_{datetime.now():%Y%m%d_%H%M%S}"
