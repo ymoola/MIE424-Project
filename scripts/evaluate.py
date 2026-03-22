@@ -2,6 +2,7 @@ import argparse
 import sys
 from pathlib import Path
 
+import pandas as pd
 import torch
 import torch.nn as nn
 
@@ -37,6 +38,7 @@ def main() -> None:
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--split", type=str, default="test", choices=["val", "test"])
     parser.add_argument("--max-batches", type=int, default=None)
+    parser.add_argument("--output-csv", type=str, default=None)
     parser.add_argument(
         "--no-download",
         action="store_true",
@@ -74,6 +76,23 @@ def main() -> None:
         f"{args.split}_loss={metrics['loss']:.4f} "
         f"{args.split}_acc={metrics['acc']:.4f}"
     )
+
+    if args.output_csv is not None:
+        output_path = Path(args.output_csv)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(
+            [
+                {
+                    "checkpoint": args.checkpoint,
+                    "split": args.split,
+                    "loss": metrics["loss"],
+                    "accuracy": metrics["acc"],
+                    "seed": args.seed,
+                    "model": args.model,
+                }
+            ]
+        ).to_csv(output_path, index=False)
+        print(f"Saved evaluation CSV: {output_path}")
 
 
 if __name__ == "__main__":

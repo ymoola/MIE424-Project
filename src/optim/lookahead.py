@@ -30,6 +30,8 @@ class Lookahead(Optimizer):
         self.k = k
         self.alpha = alpha
         self.step_counter = 0
+        self.sync_happened = False
+        self.last_sync_distance = None
 
         defaults = dict(k=k, alpha=alpha, **base_optimizer.defaults)
         super().__init__(base_optimizer.param_groups, defaults)
@@ -52,18 +54,27 @@ class Lookahead(Optimizer):
         self.step_counter += 1
 
         if self.step_counter % self.k != 0:
+            self.sync_happened = False
+            self.last_sync_distance = None
             return loss
 
         idx = 0
+        sync_distances = []
         for group in self.param_groups:
             for param in group["params"]:
                 if param is None:
                     idx += 1
                     continue
                 slow = self.slow_weights[idx]
+                sync_distances.append(torch.norm(param.data - slow, p=2).item())
                 slow.add_(param.data - slow, alpha=self.alpha)
                 param.data.copy_(slow)
                 idx += 1
+
+        self.sync_happened = True
+        self.last_sync_distance = (
+            sum(sync_distances) / len(sync_distances) if sync_distances else None
+        )
 
         return loss
 
