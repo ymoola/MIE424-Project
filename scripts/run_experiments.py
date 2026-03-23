@@ -18,6 +18,22 @@ def _ensure_experiments_root() -> None:
     EXPERIMENTS_ROOT.mkdir(parents=True, exist_ok=True)
 
 
+def _suite_experiments_dir(suite_name: str) -> Path:
+    return EXPERIMENTS_ROOT / suite_name
+
+
+def _suite_logs_dir(suite_name: str) -> Path:
+    return RESULTS_ROOT / "logs" / suite_name
+
+
+def _suite_checkpoints_dir(suite_name: str) -> Path:
+    return RESULTS_ROOT / "checkpoints" / suite_name
+
+
+def _suite_tensorboard_dir(suite_name: str) -> Path:
+    return RESULTS_ROOT / "tensorboard" / suite_name
+
+
 def _relative_to_repo(path: Path) -> str:
     return str(path.relative_to(PROJECT_ROOT))
 
@@ -39,16 +55,12 @@ def _make_run_name(config: dict[str, object]) -> str:
     return "__".join(name_parts)
 
 
-def _metrics_path(run_name: str) -> Path:
-    return RESULTS_ROOT / "logs" / f"{run_name}.csv"
+def _metrics_path(suite_name: str, run_name: str) -> Path:
+    return _suite_logs_dir(suite_name) / f"{run_name}.csv"
 
 
-def _checkpoint_dir(run_name: str) -> Path:
-    return RESULTS_ROOT / "checkpoints" / run_name
-
-
-def _event_dir(run_name: str) -> Path:
-    return RESULTS_ROOT / "tensorboard" / run_name
+def _checkpoint_dir(suite_name: str, run_name: str) -> Path:
+    return _suite_checkpoints_dir(suite_name) / run_name
 
 
 def _run_command(command: list[str]) -> None:
@@ -107,9 +119,10 @@ def _train_run(
     config: dict[str, object],
     args: argparse.Namespace,
 ) -> dict[str, object]:
+    suite_name = str(config["suite"])
     run_name = _make_run_name(config)
-    metrics_csv = _metrics_path(run_name)
-    checkpoint_dir = _checkpoint_dir(run_name)
+    metrics_csv = _metrics_path(suite_name, run_name)
+    checkpoint_dir = _checkpoint_dir(suite_name, run_name)
 
     command = [
         sys.executable,
@@ -144,6 +157,12 @@ def _train_run(
         args.device,
         "--run-name",
         run_name,
+        "--log-dir",
+        str(_suite_tensorboard_dir(suite_name)),
+        "--checkpoint-dir",
+        str(_suite_checkpoints_dir(suite_name)),
+        "--metrics-dir",
+        str(_suite_logs_dir(suite_name)),
     ]
     if args.no_download:
         command.append("--no-download")
@@ -155,7 +174,7 @@ def _train_run(
     _run_command(command)
 
     row = {
-        "suite": config["suite"],
+        "suite": suite_name,
         "run_name": run_name,
         "optimizer": config["optimizer"],
         "lr": config["lr"],
@@ -207,6 +226,9 @@ def _select_pilot_lrs(pilot_runs: pd.DataFrame) -> pd.DataFrame:
 
     selected_df = pd.DataFrame(selections)
     selected_df.to_csv(EXPERIMENTS_ROOT / "pilot_lr_selected.csv", index=False)
+    suite_dir = _suite_experiments_dir("pilot_lr")
+    suite_dir.mkdir(parents=True, exist_ok=True)
+    selected_df.to_csv(suite_dir / "selected.csv", index=False)
     return selected_df
 
 
@@ -269,7 +291,7 @@ def _core_comparison_configs(selected_lrs: dict[str, float]) -> list[dict[str, o
             "lookahead_k": 5,
             "lookahead_alpha": 0.5,
             "seed": 42,
-            "epochs": 50,
+            "epochs": 100,
         },
         {
             "suite": "core_comparison",
@@ -280,7 +302,7 @@ def _core_comparison_configs(selected_lrs: dict[str, float]) -> list[dict[str, o
             "lookahead_k": 5,
             "lookahead_alpha": 0.5,
             "seed": 42,
-            "epochs": 50,
+            "epochs": 100,
         },
         {
             "suite": "core_comparison",
@@ -291,7 +313,7 @@ def _core_comparison_configs(selected_lrs: dict[str, float]) -> list[dict[str, o
             "lookahead_k": 5,
             "lookahead_alpha": 0.5,
             "seed": 42,
-            "epochs": 50,
+            "epochs": 100,
         },
         {
             "suite": "core_comparison",
@@ -302,7 +324,7 @@ def _core_comparison_configs(selected_lrs: dict[str, float]) -> list[dict[str, o
             "lookahead_k": 5,
             "lookahead_alpha": 0.5,
             "seed": 42,
-            "epochs": 50,
+            "epochs": 100,
         },
         {
             "suite": "core_comparison",
@@ -313,7 +335,7 @@ def _core_comparison_configs(selected_lrs: dict[str, float]) -> list[dict[str, o
             "lookahead_k": 5,
             "lookahead_alpha": 0.5,
             "seed": 42,
-            "epochs": 50,
+            "epochs": 100,
         },
     ]
 
@@ -381,6 +403,9 @@ def _select_lookahead_configs(sensitivity_runs: pd.DataFrame) -> pd.DataFrame:
 
     selected_df = pd.DataFrame(selections)
     selected_df.to_csv(EXPERIMENTS_ROOT / "lookahead_sensitivity_selected.csv", index=False)
+    suite_dir = _suite_experiments_dir("lookahead_sensitivity")
+    suite_dir.mkdir(parents=True, exist_ok=True)
+    selected_df.to_csv(suite_dir / "selected.csv", index=False)
     return selected_df
 
 
@@ -476,6 +501,9 @@ def _run_training_suite(
 
     suite_df = pd.DataFrame(rows)
     suite_df.to_csv(EXPERIMENTS_ROOT / f"{suite_name}_runs.csv", index=False)
+    suite_dir = _suite_experiments_dir(suite_name)
+    suite_dir.mkdir(parents=True, exist_ok=True)
+    suite_df.to_csv(suite_dir / "runs.csv", index=False)
     return suite_df
 
 
@@ -510,6 +538,9 @@ def _run_core_comparison(args: argparse.Namespace) -> None:
         args,
     )
     core_runs.to_csv(EXPERIMENTS_ROOT / "core_comparison_summary.csv", index=False)
+    suite_dir = _suite_experiments_dir("core_comparison")
+    suite_dir.mkdir(parents=True, exist_ok=True)
+    core_runs.to_csv(suite_dir / "summary.csv", index=False)
 
 
 def _run_lookahead_sensitivity(args: argparse.Namespace) -> None:
@@ -520,6 +551,9 @@ def _run_lookahead_sensitivity(args: argparse.Namespace) -> None:
         args,
     )
     _select_lookahead_configs(sensitivity_runs)
+    suite_dir = _suite_experiments_dir("lookahead_sensitivity")
+    suite_dir.mkdir(parents=True, exist_ok=True)
+    sensitivity_runs.to_csv(suite_dir / "summary.csv", index=False)
 
 
 def _run_final_repeats(args: argparse.Namespace) -> None:
@@ -542,12 +576,18 @@ def _run_final_repeats(args: argparse.Namespace) -> None:
         ]
     ]
     final_runs.to_csv(EXPERIMENTS_ROOT / "final_repeats_runs.csv", index=False)
+    suite_dir = _suite_experiments_dir("final_repeats")
+    suite_dir.mkdir(parents=True, exist_ok=True)
+    final_runs.to_csv(suite_dir / "runs.csv", index=False)
     _save_group_summary(
         final_runs,
         "optimizer",
         ["best_val_accuracy", "final_val_accuracy"],
         EXPERIMENTS_ROOT / "final_repeats_summary.csv",
     )
+    summary_path = suite_dir / "summary.csv"
+    summary_df = pd.read_csv(EXPERIMENTS_ROOT / "final_repeats_summary.csv")
+    summary_df.to_csv(summary_path, index=False)
 
 
 def _run_final_test(args: argparse.Namespace) -> None:
@@ -556,7 +596,7 @@ def _run_final_test(args: argparse.Namespace) -> None:
         "final repeats summary",
     )
     eval_rows = []
-    eval_output_dir = EXPERIMENTS_ROOT / "evals"
+    eval_output_dir = _suite_experiments_dir("final_test") / "evals"
     eval_output_dir.mkdir(parents=True, exist_ok=True)
 
     for _, row in final_repeats.head(args.limit_runs).iterrows() if args.limit_runs is not None else final_repeats.iterrows():
@@ -609,12 +649,17 @@ def _run_final_test(args: argparse.Namespace) -> None:
 
     final_test_df = pd.DataFrame(eval_rows)
     final_test_df.to_csv(EXPERIMENTS_ROOT / "final_test_runs.csv", index=False)
+    suite_dir = _suite_experiments_dir("final_test")
+    suite_dir.mkdir(parents=True, exist_ok=True)
+    final_test_df.to_csv(suite_dir / "runs.csv", index=False)
     _save_group_summary(
         final_test_df,
         "optimizer",
         ["accuracy", "loss"],
         EXPERIMENTS_ROOT / "final_test_summary.csv",
     )
+    summary_df = pd.read_csv(EXPERIMENTS_ROOT / "final_test_summary.csv")
+    summary_df.to_csv(suite_dir / "summary.csv", index=False)
 
 
 def main() -> None:
