@@ -75,7 +75,7 @@ def main() -> None:
         "--dataset",
         type=str,
         default="cifar10",
-        choices=list(DATASET_LOADERS),
+        choices=list(data_loaders),
         help="Dataset to use for training.",
     )
     parser.add_argument("--data-root", type=str, default="data")
@@ -109,7 +109,7 @@ def main() -> None:
     device = _resolve_device(args.device)
     print(f"Using device: {device}")
 
-    get_loaders = DATASET_LOADERS[args.dataset]
+    get_loaders = data_loaders[args.dataset]
     train_loader, val_loader, _, class_names = get_loaders(
         data_root=args.data_root,
         batch_size=args.batch_size,
