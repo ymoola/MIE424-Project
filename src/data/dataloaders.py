@@ -1,137 +1,249 @@
 from pathlib import Path
-from typing import List, Tuple
 
 import torch
 from torch.utils.data import DataLoader, Subset
-from torchvision import datasets, transforms
+from torchvision.datasets import CIFAR10, FashionMNIST, MNIST
+from torchvision.transforms import Compose, Lambda, Resize, ToTensor
 
-CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
-CIFAR10_STD = (0.2023, 0.1994, 0.2010)
-
-
-def _build_train_transform() -> transforms.Compose:
-    return transforms.Compose(
-        [
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(CIFAR10_MEAN, CIFAR10_STD),
-        ]
-    )
+from src.utils.seed import set_global_seed
 
 
-def _build_eval_transform() -> transforms.Compose:
-    return transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Normalize(CIFAR10_MEAN, CIFAR10_STD),
-        ]
-    )
+def _grayscale_to_rgb(x: torch.Tensor) -> torch.Tensor:
+    """Replicate grayscale channel to 3 channels for ResNet compatibility."""
+    return x.repeat(3, 1, 1)
 
 
-def _resolve_download_flag(data_root: Path, download_if_missing: bool) -> bool:
-    local_cifar_folder = data_root / "cifar-10-batches-py"
-    if local_cifar_folder.exists():
-        return False
+CIFAR10_CLASSES = (
+    "airplane",
+    "automobile",
+    "bird",
+    "cat",
+    "deer",
+    "dog",
+    "frog",
+    "horse",
+    "ship",
+    "truck",
+)
 
-    if download_if_missing:
-        return True
+MNIST_CLASSES = (
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+)
 
-    raise FileNotFoundError(
-        "CIFAR-10 was not found at "
-        f"'{local_cifar_folder}'. "
-        "Place 'cifar-10-batches-py' there or enable download_if_missing."
-    )
+FASHION_MNIST_CLASSES = (
+    "T-shirt/top",
+    "Trouser",
+    "Pullover",
+    "Dress",
+    "Coat",
+    "Sandal",
+    "Shirt",
+    "Sneaker",
+    "Bag",
+    "Ankle boot",
+)
 
-
-def _split_indices(num_items: int, val_split: float, seed: int) -> Tuple[List[int], List[int]]:
-    if not 0.0 < val_split < 1.0:
-        raise ValueError(f"val_split must be between 0 and 1 (exclusive). Got {val_split}.")
-
-    num_val = int(num_items * val_split)
-    if num_val <= 0 or num_val >= num_items:
-        raise ValueError(
-            f"val_split={val_split} produced invalid split sizes for num_items={num_items}."
-        )
-
-    generator = torch.Generator().manual_seed(seed)
-    permutation = torch.randperm(num_items, generator=generator).tolist()
-    val_indices = permutation[:num_val]
-    train_indices = permutation[num_val:]
-    return train_indices, val_indices
+# MNIST and Fashion-MNIST are 28x28 grayscale; replicate to 3 channels and resize to 32x32 for ResNet compatibility.
+MNIST_TRANSFORM = Compose([
+    ToTensor(),
+    Lambda(_grayscale_to_rgb),
+    Resize((32, 32)),
+])
 
 
 def get_cifar10_loaders(
-    data_root: str | Path,
-    batch_size: int,
-    num_workers: int,
-    val_split: float,
-    seed: int,
+    data_root: str = "data",
+    batch_size: int = 64,
+    num_workers: int = 2,
+    val_split: float = 0.1,
+    seed: int = 42,
     download_if_missing: bool = True,
-) -> Tuple[DataLoader, DataLoader, DataLoader, List[str]]:
+) -> tuple[DataLoader, DataLoader, DataLoader, tuple[str, ...]]:
+    """Create train, validation, and test loaders for CIFAR-10.
+
+    Uses local cifar-10-batches-py under data_root if present; otherwise
+    downloads via torchvision when download_if_missing is True.
     """
-    Build CIFAR-10 train/val/test dataloaders.
-
-    Returns:
-        (train_loader, val_loader, test_loader, class_names)
-    """
-    data_root = Path(data_root)
-    data_root.mkdir(parents=True, exist_ok=True)
-    download = _resolve_download_flag(data_root=data_root, download_if_missing=download_if_missing)
-
-    train_transform = _build_train_transform()
-    eval_transform = _build_eval_transform()
-
-    train_dataset_aug = datasets.CIFAR10(
-        root=str(data_root),
+    root = Path(data_root)
+    cifar10_transform = ToTensor()
+    train_dataset = CIFAR10(
+        root=str(root),
         train=True,
-        transform=train_transform,
-        download=download,
+        download=download_if_missing,
+        transform=cifar10_transform,
     )
-    train_dataset_eval = datasets.CIFAR10(
-        root=str(data_root),
-        train=True,
-        transform=eval_transform,
-        download=False,
-    )
-    test_dataset = datasets.CIFAR10(
-        root=str(data_root),
+    test_dataset = CIFAR10(
+        root=str(root),
         train=False,
-        transform=eval_transform,
-        download=False,
+        download=download_if_missing,
+        transform=cifar10_transform,
     )
 
-    train_indices, val_indices = _split_indices(
-        num_items=len(train_dataset_aug),
-        val_split=val_split,
-        seed=seed,
-    )
+    set_global_seed(seed)
+    n_train = len(train_dataset)
+    indices = torch.randperm(n_train).tolist()
+    n_val = int(n_train * val_split)
+    val_indices = indices[:n_val]
+    train_indices = indices[n_val:]
 
-    train_subset = Subset(train_dataset_aug, train_indices)
-    val_subset = Subset(train_dataset_eval, val_indices)
+    train_subset = Subset(train_dataset, train_indices)
+    val_subset = Subset(train_dataset, val_indices)
 
-    pin_memory = torch.cuda.is_available()
     train_loader = DataLoader(
         train_subset,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=pin_memory,
+        pin_memory=True,
     )
     val_loader = DataLoader(
         val_subset,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=pin_memory,
+        pin_memory=True,
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=pin_memory,
+        pin_memory=True,
     )
 
-    class_names = list(train_dataset_aug.classes)
-    return train_loader, val_loader, test_loader, class_names
+    return train_loader, val_loader, test_loader, CIFAR10_CLASSES
+
+
+def get_mnist_loaders(
+    data_root: str = "data",
+    batch_size: int = 64,
+    num_workers: int = 2,
+    val_split: float = 0.1,
+    seed: int = 42,
+    download_if_missing: bool = True,
+) -> tuple[DataLoader, DataLoader, DataLoader, tuple[str, ...]]:
+    """Create train, validation, and test loaders for MNIST.
+
+    Uses local MNIST/raw under data_root if present; otherwise downloads via
+    torchvision when download_if_missing is True. Transforms grayscale to
+    3-channel 32x32 for ResNet compatibility.
+    """
+    root = Path(data_root)
+    train_dataset = MNIST(
+        root=str(root),
+        train=True,
+        download=download_if_missing,
+        transform=MNIST_TRANSFORM,
+    )
+    test_dataset = MNIST(
+        root=str(root),
+        train=False,
+        download=download_if_missing,
+        transform=MNIST_TRANSFORM,
+    )
+
+    set_global_seed(seed)
+    n_train = len(train_dataset)
+    indices = torch.randperm(n_train).tolist()
+    n_val = int(n_train * val_split)
+    val_indices = indices[:n_val]
+    train_indices = indices[n_val:]
+
+    train_subset = Subset(train_dataset, train_indices)
+    val_subset = Subset(train_dataset, val_indices)
+
+    train_loader = DataLoader(
+        train_subset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    val_loader = DataLoader(
+        val_subset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    return train_loader, val_loader, test_loader, MNIST_CLASSES
+
+
+def get_fashion_mnist_loaders(
+    data_root: str = "data",
+    batch_size: int = 64,
+    num_workers: int = 2,
+    val_split: float = 0.1,
+    seed: int = 42,
+    download_if_missing: bool = True,
+) -> tuple[DataLoader, DataLoader, DataLoader, tuple[str, ...]]:
+    """Create train, validation, and test loaders for Fashion-MNIST.
+
+    Uses local Fashion-MNIST/raw under data_root if present; otherwise downloads
+    via torchvision when download_if_missing is True. Transforms grayscale to
+    3-channel 32x32 for ResNet compatibility.
+    """
+    root = Path(data_root)
+    train_dataset = FashionMNIST(
+        root=str(root),
+        train=True,
+        download=download_if_missing,
+        transform=MNIST_TRANSFORM,
+    )
+    test_dataset = FashionMNIST(
+        root=str(root),
+        train=False,
+        download=download_if_missing,
+        transform=MNIST_TRANSFORM,
+    )
+
+    set_global_seed(seed)
+    n_train = len(train_dataset)
+    indices = torch.randperm(n_train).tolist()
+    n_val = int(n_train * val_split)
+    val_indices = indices[:n_val]
+    train_indices = indices[n_val:]
+
+    train_subset = Subset(train_dataset, train_indices)
+    val_subset = Subset(train_dataset, val_indices)
+
+    train_loader = DataLoader(
+        train_subset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    val_loader = DataLoader(
+        val_subset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    return train_loader, val_loader, test_loader, FASHION_MNIST_CLASSES
