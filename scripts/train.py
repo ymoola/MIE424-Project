@@ -12,7 +12,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.dataloaders import get_cifar10_loaders
+from src.data.dataloaders import get_cifar10_loaders, get_fashion_mnist_loaders, get_mnist_loaders
+
+data_loaders = {
+    "cifar10": get_cifar10_loaders,
+    "mnist": get_mnist_loaders,
+    "fashion_mnist": get_fashion_mnist_loaders,
+}
 from src.engine.trainer import train_model
 from src.models import build_model
 from src.optim import Lookahead
@@ -62,7 +68,16 @@ def _build_optimizer(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train baseline model on CIFAR-10.")
+    parser = argparse.ArgumentParser(
+        description="Train baseline model on CIFAR-10, MNIST, or Fashion-MNIST."
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="cifar10",
+        choices=list(DATASET_LOADERS),
+        help="Dataset to use for training.",
+    )
     parser.add_argument("--data-root", type=str, default="data")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--num-workers", type=int, default=2)
@@ -86,7 +101,7 @@ def main() -> None:
     parser.add_argument(
         "--no-download",
         action="store_true",
-        help="Disable download fallback if local CIFAR-10 files are missing.",
+        help="Disable download fallback if local dataset files are missing.",
     )
     args = parser.parse_args()
 
@@ -94,7 +109,8 @@ def main() -> None:
     device = _resolve_device(args.device)
     print(f"Using device: {device}")
 
-    train_loader, val_loader, _, class_names = get_cifar10_loaders(
+    get_loaders = DATASET_LOADERS[args.dataset]
+    train_loader, val_loader, _, class_names = get_loaders(
         data_root=args.data_root,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
@@ -115,7 +131,7 @@ def main() -> None:
         lookahead_alpha=args.lookahead_alpha,
     )
 
-    run_name = args.run_name or f"{args.model}_{args.optimizer}_s{args.seed}_{datetime.now():%Y%m%d_%H%M%S}"
+    run_name = args.run_name or f"{args.dataset}_{args.model}_{args.optimizer}_s{args.seed}_{datetime.now():%Y%m%d_%H%M%S}"
     log_dir = Path(args.log_dir) / run_name
     checkpoint_dir = Path(args.checkpoint_dir) / run_name
     metrics_dir = Path(args.metrics_dir)

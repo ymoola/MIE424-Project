@@ -7,7 +7,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.dataloaders import get_cifar10_loaders
+from src.data.dataloaders import get_cifar10_loaders, get_fashion_mnist_loaders, get_mnist_loaders
+
+data_loaders = {
+    "cifar10": get_cifar10_loaders,
+    "mnist": get_mnist_loaders,
+    "fashion_mnist": get_fashion_mnist_loaders,
+}
 
 
 def _print_batch_info(loader_name: str, loader) -> None:
@@ -27,7 +33,8 @@ def _subset_indices(loader):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Smoke test CIFAR-10 dataloaders.")
+    parser = argparse.ArgumentParser(description="Smoke test CIFAR-10, MNIST, or Fashion-MNIST dataloaders.")
+    parser.add_argument("--dataset", type=str, default="cifar10", choices=list(data_loaders), help="Dataset to smoke test.")
     parser.add_argument("--data-root", type=str, default="data")
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-workers", type=int, default=2)
@@ -41,8 +48,10 @@ def main() -> None:
     args = parser.parse_args()
 
     download_if_missing = not args.no_download
+    
+    get_loaders = data_loaders[args.dataset]
 
-    train_loader, val_loader, test_loader, class_names = get_cifar10_loaders(
+    train_loader, val_loader, test_loader, class_names = get_loaders(
         data_root=args.data_root,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
@@ -56,7 +65,7 @@ def main() -> None:
     _print_batch_info("test", test_loader)
     print(f"class_count={len(class_names)} classes={class_names}")
 
-    _, val_loader_repeat, _, _ = get_cifar10_loaders(
+    _, val_loader_repeat, _, _ = get_loaders(
         data_root=args.data_root,
         batch_size=args.batch_size,
         num_workers=args.num_workers,

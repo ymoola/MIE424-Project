@@ -10,7 +10,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.dataloaders import get_cifar10_loaders
+from src.data.dataloaders import (
+    get_cifar10_loaders,
+    get_fashion_mnist_loaders,
+    get_mnist_loaders,
+)
+
+data_loaders = {
+    "cifar10": get_cifar10_loaders,
+    "mnist": get_mnist_loaders,
+    "fashion_mnist": get_fashion_mnist_loaders,
+}
 from src.engine.evaluator import evaluate_model
 from src.models import build_model
 
@@ -27,8 +37,9 @@ def _resolve_device(device_arg: str) -> torch.device:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate checkpoint on CIFAR-10.")
+    parser = argparse.ArgumentParser(description="Evaluate checkpoint on CIFAR-10, MNIST, or Fashion-MNIST.")
     parser.add_argument("--checkpoint", type=str, required=True)
+    parser.add_argument("--dataset", type=str, default="cifar10", choices=list(data_loaders), help="Dataset used when training the checkpoint.")
     parser.add_argument("--data-root", type=str, default="data")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--num-workers", type=int, default=2)
@@ -42,14 +53,15 @@ def main() -> None:
     parser.add_argument(
         "--no-download",
         action="store_true",
-        help="Disable download fallback if local CIFAR-10 files are missing.",
+        help="Disable download fallback if local dataset files are missing.",
     )
     args = parser.parse_args()
 
     device = _resolve_device(args.device)
     print(f"Using device: {device}")
 
-    _, val_loader, test_loader, class_names = get_cifar10_loaders(
+    get_loaders = data_loaders[args.dataset]
+    _, val_loader, test_loader, class_names = get_loaders(
         data_root=args.data_root,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
