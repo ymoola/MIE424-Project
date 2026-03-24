@@ -600,7 +600,7 @@ def _run_final_test(args: argparse.Namespace) -> None:
     eval_output_dir.mkdir(parents=True, exist_ok=True)
 
     for _, row in final_repeats.head(args.limit_runs).iterrows() if args.limit_runs is not None else final_repeats.iterrows():
-        best_checkpoint = _checkpoint_dir(str(row["run_name"])) / "best.pt"
+        best_checkpoint = _suite_checkpoints_dir("final_repeats") / str(row["run_name"]) / "best.pt"
         if not best_checkpoint.exists():
             raise FileNotFoundError(f"Expected best checkpoint not found: {best_checkpoint}")
 
