@@ -100,8 +100,17 @@ def _resolve_download_flag(data_root: Path, download_if_missing: bool) -> bool:
 
 
 def _resolve_mnist_download_flag(data_root: Path, download_if_missing: bool) -> bool:
-    processed_train = data_root / "MNIST" / "processed" / "training.pt"
-    if processed_train.exists():
+    legacy_processed_train = data_root / "MNIST" / "processed" / "training.pt"
+    raw_train_images = data_root / "MNIST" / "raw" / "train-images-idx3-ubyte"
+    raw_train_labels = data_root / "MNIST" / "raw" / "train-labels-idx1-ubyte"
+    raw_test_images = data_root / "MNIST" / "raw" / "t10k-images-idx3-ubyte"
+    raw_test_labels = data_root / "MNIST" / "raw" / "t10k-labels-idx1-ubyte"
+    if legacy_processed_train.exists() or (
+        raw_train_images.exists()
+        and raw_train_labels.exists()
+        and raw_test_images.exists()
+        and raw_test_labels.exists()
+    ):
         return False
 
     if download_if_missing:
@@ -115,8 +124,17 @@ def _resolve_mnist_download_flag(data_root: Path, download_if_missing: bool) -> 
 
 
 def _resolve_fashion_mnist_download_flag(data_root: Path, download_if_missing: bool) -> bool:
-    processed_train = data_root / "FashionMNIST" / "processed" / "training.pt"
-    if processed_train.exists():
+    legacy_processed_train = data_root / "FashionMNIST" / "processed" / "training.pt"
+    raw_train_images = data_root / "FashionMNIST" / "raw" / "train-images-idx3-ubyte"
+    raw_train_labels = data_root / "FashionMNIST" / "raw" / "train-labels-idx1-ubyte"
+    raw_test_images = data_root / "FashionMNIST" / "raw" / "t10k-images-idx3-ubyte"
+    raw_test_labels = data_root / "FashionMNIST" / "raw" / "t10k-labels-idx1-ubyte"
+    if legacy_processed_train.exists() or (
+        raw_train_images.exists()
+        and raw_train_labels.exists()
+        and raw_test_images.exists()
+        and raw_test_labels.exists()
+    ):
         return False
 
     if download_if_missing:
