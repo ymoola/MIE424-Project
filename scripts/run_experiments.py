@@ -10,9 +10,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TRAIN_SCRIPT = PROJECT_ROOT / "scripts" / "train.py"
 EVAL_SCRIPT = PROJECT_ROOT / "scripts" / "evaluate.py"
 RESULTS_ROOT = PROJECT_ROOT / "results"
-EXPERIMENTS_ROOT = RESULTS_ROOT / "experiments"
 
 DATASET_CHOICES = ("cifar10", "mnist", "fashion_mnist")
+
+
+def _dataset_results_root(dataset: str) -> Path:
+    return RESULTS_ROOT / dataset
 
 
 def _dataset_hparams(dataset: str) -> dict[str, object]:
@@ -49,8 +52,7 @@ def _dataset_hparams(dataset: str) -> dict[str, object]:
 
 
 def _dataset_experiments_root(dataset: str) -> Path:
-    """Per-dataset folder so MNIST / CIFAR / Fashion runs do not overwrite each other's CSVs."""
-    return EXPERIMENTS_ROOT / dataset
+    return _dataset_results_root(dataset) / "experiments"
 
 
 def _manifest_path(dataset: str) -> Path:
@@ -58,24 +60,26 @@ def _manifest_path(dataset: str) -> Path:
 
 
 def _ensure_experiments_root(dataset: str) -> None:
-    EXPERIMENTS_ROOT.mkdir(parents=True, exist_ok=True)
-    _dataset_experiments_root(dataset).mkdir(parents=True, exist_ok=True)
+    dataset_root = _dataset_results_root(dataset)
+    dataset_root.mkdir(parents=True, exist_ok=True)
+    for child in ["experiments", "logs", "checkpoints", "tensorboard"]:
+        (dataset_root / child).mkdir(parents=True, exist_ok=True)
 
 
 def _suite_experiments_dir(suite_name: str, dataset: str) -> Path:
     return _dataset_experiments_root(dataset) / suite_name
 
 
-def _suite_logs_dir(suite_name: str) -> Path:
-    return RESULTS_ROOT / "logs" / suite_name
+def _suite_logs_dir(suite_name: str, dataset: str) -> Path:
+    return _dataset_results_root(dataset) / "logs" / suite_name
 
 
-def _suite_checkpoints_dir(suite_name: str) -> Path:
-    return RESULTS_ROOT / "checkpoints" / suite_name
+def _suite_checkpoints_dir(suite_name: str, dataset: str) -> Path:
+    return _dataset_results_root(dataset) / "checkpoints" / suite_name
 
 
-def _suite_tensorboard_dir(suite_name: str) -> Path:
-    return RESULTS_ROOT / "tensorboard" / suite_name
+def _suite_tensorboard_dir(suite_name: str, dataset: str) -> Path:
+    return _dataset_results_root(dataset) / "tensorboard" / suite_name
 
 
 def _relative_to_repo(path: Path) -> str:
@@ -99,12 +103,12 @@ def _make_run_name(config: dict[str, object], dataset: str) -> str:
     return "__".join(name_parts) + f"__{dataset}"
 
 
-def _metrics_path(suite_name: str, run_name: str) -> Path:
-    return _suite_logs_dir(suite_name) / f"{run_name}.csv"
+def _metrics_path(suite_name: str, run_name: str, dataset: str) -> Path:
+    return _suite_logs_dir(suite_name, dataset) / f"{run_name}.csv"
 
 
-def _checkpoint_dir(suite_name: str, run_name: str) -> Path:
-    return _suite_checkpoints_dir(suite_name) / run_name
+def _checkpoint_dir(suite_name: str, run_name: str, dataset: str) -> Path:
+    return _suite_checkpoints_dir(suite_name, dataset) / run_name
 
 
 def _run_command(command: list[str]) -> None:
@@ -165,8 +169,8 @@ def _train_run(
 ) -> dict[str, object]:
     suite_name = str(config["suite"])
     run_name = _make_run_name(config, args.dataset)
-    metrics_csv = _metrics_path(suite_name, run_name)
-    checkpoint_dir = _checkpoint_dir(suite_name, run_name)
+    metrics_csv = _metrics_path(suite_name, run_name, args.dataset)
+    checkpoint_dir = _checkpoint_dir(suite_name, run_name, args.dataset)
 
     command = [
         sys.executable,
@@ -204,11 +208,11 @@ def _train_run(
         "--run-name",
         run_name,
         "--log-dir",
-        str(_suite_tensorboard_dir(suite_name)),
+        str(_suite_tensorboard_dir(suite_name, args.dataset)),
         "--checkpoint-dir",
-        str(_suite_checkpoints_dir(suite_name)),
+        str(_suite_checkpoints_dir(suite_name, args.dataset)),
         "--metrics-dir",
-        str(_suite_logs_dir(suite_name)),
+        str(_suite_logs_dir(suite_name, args.dataset)),
     ]
     if args.no_download:
         command.append("--no-download")
@@ -668,7 +672,11 @@ def _run_final_test(args: argparse.Namespace) -> None:
     eval_output_dir.mkdir(parents=True, exist_ok=True)
 
     for _, row in final_repeats.head(args.limit_runs).iterrows() if args.limit_runs is not None else final_repeats.iterrows():
-        best_checkpoint = _suite_checkpoints_dir("final_repeats") / str(row["run_name"]) / "best.pt"
+        best_checkpoint = (
+            _suite_checkpoints_dir("final_repeats", args.dataset)
+            / str(row["run_name"])
+            / "best.pt"
+        )
         if not best_checkpoint.exists():
             raise FileNotFoundError(f"Expected best checkpoint not found: {best_checkpoint}")
 

@@ -93,9 +93,9 @@ def main() -> None:
     parser.add_argument("--lookahead-alpha", type=float, default=0.5)
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--run-name", type=str, default=None)
-    parser.add_argument("--log-dir", type=str, default="results/tensorboard")
-    parser.add_argument("--checkpoint-dir", type=str, default="results/checkpoints")
-    parser.add_argument("--metrics-dir", type=str, default="results/logs")
+    parser.add_argument("--log-dir", type=str, default=None)
+    parser.add_argument("--checkpoint-dir", type=str, default=None)
+    parser.add_argument("--metrics-dir", type=str, default=None)
     parser.add_argument("--max-train-batches", type=int, default=None)
     parser.add_argument("--max-eval-batches", type=int, default=None)
     parser.add_argument(
@@ -132,9 +132,20 @@ def main() -> None:
     )
 
     run_name = args.run_name or f"{args.dataset}_{args.model}_{args.optimizer}_s{args.seed}_{datetime.now():%Y%m%d_%H%M%S}"
-    log_dir = Path(args.log_dir) / run_name
-    checkpoint_dir = Path(args.checkpoint_dir) / run_name
-    metrics_dir = Path(args.metrics_dir)
+    dataset_results_root = Path("results") / args.dataset
+    log_root = Path(args.log_dir) if args.log_dir is not None else dataset_results_root / "tensorboard"
+    checkpoint_root = (
+        Path(args.checkpoint_dir)
+        if args.checkpoint_dir is not None
+        else dataset_results_root / "checkpoints"
+    )
+    metrics_dir = (
+        Path(args.metrics_dir)
+        if args.metrics_dir is not None
+        else dataset_results_root / "logs"
+    )
+    log_dir = log_root / run_name
+    checkpoint_dir = checkpoint_root / run_name
     metrics_dir.mkdir(parents=True, exist_ok=True)
 
     writer = SummaryWriter(log_dir=str(log_dir))
